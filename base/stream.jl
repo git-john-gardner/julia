@@ -283,6 +283,7 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
+setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
 rawhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
@@ -467,7 +468,7 @@ function shutdown(s::LibuvStream)
         end
         iolock_end()
         unpreserve_handle(ct)
-        if isopen(s) && (s.status == StatusEOF && !isa(s, TTY)) || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+        if isopen(s) && (s.status == StatusEOF || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0) && !isa(s, TTY)
             close(s)
         end
     end
@@ -1486,6 +1487,7 @@ function close(s::BufferStream)
     end
 end
 uvfinalize(s::BufferStream) = nothing
+setup_stdio(stream::BufferStream, child_readable::Bool) = invoke(setup_stdio, Tuple{IO, Bool}, stream, child_readable)
 
 function read(s::BufferStream, ::Type{UInt8})
     nread = lock(s.cond) do
